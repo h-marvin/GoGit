@@ -1,2 +1,13 @@
-# git-update
-Go script to update git repositories.
+# GoGit
+GoGit is a simple to use Go script allowing you to conveniently update all your local git repositories with the latest changes. You decide whether you want fetch or pull. Making use of Go's channels, found repositories will be refreshed in a non-blocking manner, which allows big amounts of repositories to be updated in no time.
+
+## Options
+To customize the script at execution for your needs, there are up to four flags that can be added.
+
+`-path` allows to specify the root folder from where the script will start looking for git repos (defaults to user home)
+
+`-filter` allows filtering for a certain value to occur in the .git/config (e.g. enterprise git address)
+
+`-recursive` specifies whether or not only direct children of _-path_ will be checked or the entire subtree
+
+`-fetch` if set to _true_ a _fetch --prune_ will be performed instead of a _pull_
