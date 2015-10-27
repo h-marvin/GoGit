@@ -20,6 +20,7 @@ var gitRoot *string
 var fetch *bool
 var failed = "💥"
 var success = "👍🏼️"
+var branch = "🌿️"
 
 func main() {
 	gitRoot = flag.String("path", "", "The path to the root folder to start looking for git repositories.")
@@ -152,11 +153,15 @@ func readConfig(path string) ([]string, error) {
 
 func performGitCommands(repoPath string) string {
 	repo := trimPath(repoPath)
+	branchDesc := repo + " | "
+
 	branchName := getBranchName(repoPath)
-	branchDesc := repo + " | " + branchName + " | "
+	if !strings.EqualFold(branchName, "master") {
+		branchDesc += branch + "  " + branchName + " | "
+	}
 
 	if *fetch {
-		return branchDesc + "fetch | " + performGitFetch(repoPath)
+		return "fetch | " + branchDesc + performGitFetch(repoPath)
 	} else {
 		return branchDesc + performGitPull(repoPath)
 	}
