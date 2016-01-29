@@ -16,62 +16,64 @@ import (
 	"time"
 )
 
-var gitRoot *string
-var fetch *bool
-var failed = "💥"
-var success = "👍🏼️"
-var branch = "🌿️"
+const failed = "💥"
+const success = "👍🏼️"
+const branch = "🌿️"
+const pathSeparator = ":"
 
 func main() {
-	gitRoot = flag.String("path", "", "The path to the root folder to start looking for git repositories.")
+	inputGitRoots := flag.String("path", "", "The path to the root folder to start looking for git repositories. More than one location can be passed with a colon as separator.")
 	filter := flag.String("filter", "", "Allows filtering for a certain value to occur in the .git/config (e.g. enterprise git address).")
 	recursive := flag.Bool("recursive", false, "If 'false' only the first level of folders will be checked. If 'true' sub folders will be checked also (will not check within sub folders of git repos).")
-	fetch = flag.Bool("fetch", false, "Decide whether you want to perform a fetch --prune request instead of a pull request.")
+	fetch := flag.Bool("fetch", false, "Decide whether you want to perform a fetch --prune request instead of a pull request.")
 	flag.Parse()
 
-	if len(*gitRoot) == 0 {
+	var gitRoots []string
+	if len(*inputGitRoots) == 0 {
 		usr, err := user.Current()
 		if err != nil {
 			log.Fatal(err)
 		}
-		*gitRoot = usr.HomeDir
-	}
-	if !strings.HasSuffix(*gitRoot, "/") {
-		*gitRoot += "/"
+		gitRoots = append(gitRoots, usr.HomeDir)
+	} else {
+		gitRoots = strings.Split(*inputGitRoots, pathSeparator)
 	}
 
 	updates := 0
-	gitLocations := make(map[string]int)
 	c := make(chan string)
 	timeout := time.After(30 * time.Second)
 
-	filepath.Walk(*gitRoot, func(path string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
-			return nil
-		}
-
-		if strings.EqualFold(path, *gitRoot) {
-			return nil
-		}
-
-		if !*recursive && strings.Contains(trimPath(path), "/") {
-			return nil
-		}
-
-		if withinGitRepo(path, gitLocations) {
-			return nil
-		}
-
-		if isGitRepo(path) {
-			rememberRepo(path, gitLocations)
-			if len(*filter) == 0 || syncGitRepo(path, *filter) {
-				updates++
-				go func() { c <- performGitCommands(path) }()
+	for _, gitRoot := range gitRoots {
+		gitRoot = trailingSlash(gitRoot)
+		gitLocations := make(map[string]int)
+		filepath.Walk(gitRoot, func(path string, info os.FileInfo, err error) error {
+			if !info.IsDir() {
+				return nil
 			}
-		}
 
-		return nil
-	})
+			if strings.EqualFold(path, gitRoot) {
+				return nil
+			}
+
+			if !*recursive && strings.Contains(trimPath(path, gitRoot), "/") {
+				return nil
+			}
+
+			if withinGitRepo(path, gitLocations) {
+				return nil
+			}
+
+			if isGitRepo(path) {
+				rememberRepo(path, gitLocations)
+				if len(*filter) == 0 || syncGitRepo(path, *filter) {
+					updates++
+					go func() { c <- performGitCommands(path, gitRoot, *fetch) }()
+				}
+			}
+
+			return nil
+		})
+	}
 
 	for i := 0; i < updates; i++ {
 		select {
@@ -83,12 +85,19 @@ func main() {
 	}
 }
 
-func trimPath(path string) string {
-	return strings.TrimPrefix(path, *gitRoot)
+func trailingSlash(path string) string {
+	if !strings.HasSuffix(path, "/") {
+		path += "/"
+	}
+	return path
+}
+
+func trimPath(path string, gitRoot string) string {
+	return strings.TrimPrefix(path, gitRoot)
 }
 
 func withinGitRepo(path string, gitLocations map[string]int) bool {
-	for location, _ := range gitLocations {
+	for location := range gitLocations {
 		if strings.HasPrefix(path, location) {
 			return true
 		}
@@ -151,8 +160,8 @@ func readConfig(path string) ([]string, error) {
 	return lines, scanner.Err()
 }
 
-func performGitCommands(repoPath string) string {
-	repo := trimPath(repoPath)
+func performGitCommands(repoPath string, gitRoot string, fetch bool) string {
+	repo := trimPath(repoPath, gitRoot)
 	branchDesc := repo + " | "
 
 	branchName := getBranchName(repoPath)
@@ -160,11 +169,10 @@ func performGitCommands(repoPath string) string {
 		branchDesc += branch + "  " + branchName + " | "
 	}
 
-	if *fetch {
+	if fetch {
 		return "fetch | " + branchDesc + performGitFetch(repoPath)
-	} else {
-		return branchDesc + performGitPull(repoPath)
 	}
+	return branchDesc + performGitPull(repoPath)
 }
 
 func getBranchName(repoPath string) string {
