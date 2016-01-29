@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/h-marvin/GoGit.svg?branch=master)](https://travis-ci.org/h-marvin/GoGit)
+
 # GoGit
 GoGit is a simple to use Go script allowing you to conveniently update all your local git repositories with the latest changes. You decide whether you want fetch or pull. Making use of Go's channels, found repositories will be refreshed in a non-blocking manner, which allows big amounts of repositories to be updated in no time.
 
