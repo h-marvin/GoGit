@@ -16,10 +16,13 @@ import (
 	"time"
 )
 
-const failed = "💥"
-const success = "👍🏼️"
-const branch = "🌿️"
-const pathSeparator = ":"
+const (
+	failed        = "💥"
+	success       = "👍🏼️"
+	branch        = "🌿️"
+	pathSeparator = ":"
+	git           = "git"
+)
 
 func main() {
 	inputGitRoots := flag.String("path", "", "The path to the root folder to start looking for git repositories. More than one location can be passed with a colon as separator.")
@@ -161,8 +164,7 @@ func readConfig(path string) ([]string, error) {
 }
 
 func performGitCommands(repoPath string, gitRoot string, fetch bool) string {
-	repo := trimPath(repoPath, gitRoot)
-	branchDesc := repo + " | "
+	branchDesc := getRepoName(repoPath) + " | "
 
 	branchName := getBranchName(repoPath)
 	if !strings.EqualFold(branchName, "master") {
@@ -176,7 +178,7 @@ func performGitCommands(repoPath string, gitRoot string, fetch bool) string {
 }
 
 func getBranchName(repoPath string) string {
-	cmd := "git"
+	cmd := git
 	args := []string{"-C", repoPath, "name-rev", "--name-only", "HEAD"}
 
 	out, err := exec.Command(cmd, args...).Output()
@@ -188,7 +190,7 @@ func getBranchName(repoPath string) string {
 }
 
 func performGitFetch(repoPath string) string {
-	cmd := "git"
+	cmd := git
 	args := []string{"-C", repoPath, "fetch", "--prune"}
 
 	err := exec.Command(cmd, args...).Run()
@@ -200,7 +202,7 @@ func performGitFetch(repoPath string) string {
 }
 
 func performGitPull(repoPath string) string {
-	cmd := "git"
+	cmd := git
 	args := []string{"-C", repoPath, "pull"}
 
 	err := exec.Command(cmd, args...).Run()
@@ -209,4 +211,9 @@ func performGitPull(repoPath string) string {
 	}
 
 	return success
+}
+
+func getRepoName(repoPath string) string {
+	pathElements := strings.Split(repoPath, "/")
+	return strings.TrimSuffix(pathElements[len(pathElements)-1], ".git")
 }
