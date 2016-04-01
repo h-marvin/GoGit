@@ -9,10 +9,7 @@ Download the script:
 go get github.com/h-marvin/GoGit
 ```
 
-Navigate to the folder folder where you want the build Go artefact to be stored (e.g. ~/Scripts/). Then start the build process:
-```script
-go build $GOPATH/src/github.com/h-marvin/GoGit/git-update.go
-```
+Navigate to `$GOPATH/src/github.com/h-marvin/GoGit/` and `go build` the project. Move the output file `GoGit` to your prefered location _(e.g. ~/Scripts/)_.
 
 ## Usage
 This is the easy part. Just go ahead and call the script with the options you like. Example:
