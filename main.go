@@ -167,7 +167,7 @@ func performGitCommands(repoPath string, gitRoot string, fetch bool) string {
 	branchDesc := getRepoName(repoPath) + " | "
 
 	branchName := getBranchName(repoPath)
-	if !strings.EqualFold(branchName, "master") {
+	if printBranchName(branchName) {
 		branchDesc += branch + "  " + branchName + " | "
 	}
 
@@ -187,6 +187,13 @@ func getBranchName(repoPath string) string {
 	}
 
 	return strings.TrimSpace(string(out))
+}
+
+func printBranchName(name string) bool {
+	isMaster := strings.EqualFold(name, "master")
+	isTag := strings.HasPrefix(name, "tags/")
+
+	return !isMaster && !isTag
 }
 
 func performGitFetch(repoPath string) string {
