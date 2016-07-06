@@ -3,25 +3,23 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/h-marvin/GoGit/git"
 )
 
 const (
-	failed        = "💥"
-	success       = "👍🏼️"
 	branch        = "🌿️"
 	pathSeparator = ":"
-	git           = "git"
+	failed        = "💥"
+	success       = "👍🏼️"
 )
 
 func main() {
@@ -47,7 +45,7 @@ func main() {
 	timeout := time.After(30 * time.Second)
 
 	for _, gitRoot := range gitRoots {
-		gitRoot = trailingSlash(gitRoot)
+		gitRoot = ensureTrailingSlash(gitRoot)
 		gitLocations := make(map[string]int)
 		filepath.Walk(gitRoot, func(path string, info os.FileInfo, err error) error {
 			if !info.IsDir() {
@@ -66,9 +64,9 @@ func main() {
 				return nil
 			}
 
-			if isGitRepo(path) {
+			if git.IsRepository(path) {
 				rememberRepo(path, gitLocations)
-				if len(*filter) == 0 || syncGitRepo(path, *filter) {
+				if len(*filter) == 0 || git.SyncRepo(path, *filter) {
 					updates++
 					go func() { c <- performGitCommands(path, gitRoot, *fetch) }()
 				}
@@ -88,7 +86,7 @@ func main() {
 	}
 }
 
-func trailingSlash(path string) string {
+func ensureTrailingSlash(path string) string {
 	if !strings.HasSuffix(path, "/") {
 		path += "/"
 	}
@@ -108,18 +106,6 @@ func withinGitRepo(path string, gitLocations map[string]int) bool {
 	return false
 }
 
-func isGitRepo(folderPath string) bool {
-	children, _ := ioutil.ReadDir(folderPath)
-
-	for _, c := range children {
-		if c.IsDir() && strings.EqualFold(c.Name(), ".git") {
-			return true
-		}
-	}
-
-	return false
-}
-
 func rememberRepo(path string, gitLocations map[string]int) {
 	gitLocations[repoKey(path)] = 1
 }
@@ -128,65 +114,18 @@ func repoKey(path string) string {
 	return path + "/"
 }
 
-func syncGitRepo(repoPath string, filter string) bool {
-	configPath := repoPath + "/.git/config"
-	lines, err := readConfig(configPath)
-	sync := false
-
-	if err == nil {
-		for i := range lines {
-			if strings.Contains(lines[i], filter) {
-				sync = true
-				break
-			}
-		}
-	} else {
-		log.Fatal(err)
-	}
-
-	return sync
-}
-
-func readConfig(path string) ([]string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var lines []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-
-	return lines, scanner.Err()
-}
-
 func performGitCommands(repoPath string, gitRoot string, fetch bool) string {
 	branchDesc := getRepoName(repoPath) + " | "
 
-	branchName := getBranchName(repoPath)
+	branchName := git.GetBranchName(repoPath)
 	if printBranchName(branchName) {
 		branchDesc += branch + "  " + branchName + " | "
 	}
 
 	if fetch {
-		return "fetch | " + branchDesc + performGitFetch(repoPath)
+		return "fetch | " + branchDesc + printResult(git.Fetch(repoPath))
 	}
-	return branchDesc + performGitPull(repoPath)
-}
-
-func getBranchName(repoPath string) string {
-	cmd := git
-	args := []string{"-C", repoPath, "name-rev", "--name-only", "HEAD"}
-
-	out, err := exec.Command(cmd, args...).Output()
-	if err != nil {
-		return "no branch name"
-	}
-
-	return strings.TrimSpace(string(out))
+	return branchDesc + printResult(git.Pull(repoPath))
 }
 
 func printBranchName(name string) bool {
@@ -196,31 +135,14 @@ func printBranchName(name string) bool {
 	return !isMaster && !isTag
 }
 
-func performGitFetch(repoPath string) string {
-	cmd := git
-	args := []string{"-C", repoPath, "fetch", "--prune"}
-
-	err := exec.Command(cmd, args...).Run()
-	if err != nil {
-		return failed
-	}
-
-	return success
-}
-
-func performGitPull(repoPath string) string {
-	cmd := git
-	args := []string{"-C", repoPath, "pull"}
-
-	err := exec.Command(cmd, args...).Run()
-	if err != nil {
-		return failed
-	}
-
-	return success
-}
-
 func getRepoName(repoPath string) string {
 	pathElements := strings.Split(repoPath, "/")
 	return strings.TrimSuffix(pathElements[len(pathElements)-1], ".git")
+}
+
+func printResult(err error) string {
+	if err != nil {
+		return failed
+	}
+	return success
 }
