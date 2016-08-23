@@ -4,14 +4,14 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/h-marvin/GoGit/git"
 )
 
@@ -40,48 +40,64 @@ func main() {
 		gitRoots = strings.Split(*inputGitRoots, pathSeparator)
 	}
 
-	updates := 0
-	c := make(chan string)
+	c := make(chan string, 4)
+	var wg sync.WaitGroup
+	wg.Add(1)
 	timeout := time.After(30 * time.Second)
 
-	for _, gitRoot := range gitRoots {
-		gitRoot = ensureTrailingSlash(gitRoot)
-		gitLocations := make(map[string]int)
-		filepath.Walk(gitRoot, func(path string, info os.FileInfo, err error) error {
-			if !info.IsDir() {
-				return nil
-			}
-
-			if strings.EqualFold(path, gitRoot) {
-				return nil
-			}
-
-			if !*recursive && strings.Contains(trimPath(path, gitRoot), "/") {
-				return nil
-			}
-
-			if withinGitRepo(path, gitLocations) {
-				return nil
-			}
-
-			if git.IsRepository(path) {
-				rememberRepo(path, gitLocations)
-				if len(*filter) == 0 || git.SyncRepo(path, *filter) {
-					updates++
-					go func() { c <- performGitCommands(path, gitRoot, *fetch) }()
+	go func() {
+		for _, gitRoot := range gitRoots {
+			gitRoot = ensureTrailingSlash(gitRoot)
+			gitLocations := make(map[string]int)
+			filepath.Walk(gitRoot, func(path string, info os.FileInfo, err error) error {
+				if !info.IsDir() {
+					return nil
 				}
-			}
 
-			return nil
-		})
-	}
+				if strings.EqualFold(path, gitRoot) {
+					return nil
+				}
 
-	for i := 0; i < updates; i++ {
+				if !*recursive && strings.Contains(trimPath(path, gitRoot), "/") {
+					return nil
+				}
+
+				if withinGitRepo(path, gitLocations) {
+					return nil
+				}
+
+				if git.IsRepository(path) {
+					rememberRepo(path, gitLocations)
+					if len(*filter) == 0 || git.SyncRepo(path, *filter) {
+						wg.Add(1)
+						go func() {
+							defer wg.Done()
+							c <- performGitCommands(path, gitRoot, *fetch)
+						}()
+					}
+				}
+				return nil
+			})
+		}
+		wg.Done()
+	}()
+
+	done := make(chan bool)
+	go func() {
+		wg.Wait()
+		done <- true
+	}()
+
+	for {
 		select {
 		case result := <-c:
-			fmt.Println(result)
+			log.Info(result)
+		case <-done:
+			log.Info("All repos have been synced.")
+			return
 		case <-timeout:
-			fmt.Println("timedout")
+			log.Info("Operation timed out.")
+			return
 		}
 	}
 }
