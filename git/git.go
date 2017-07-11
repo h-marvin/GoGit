@@ -62,6 +62,14 @@ func readConfig(path string) ([]string, error) {
 	return lines, scanner.Err()
 }
 
+//Clean - Will perform a 'git gc' command on the given repository.
+func Clean(repoPath string) error {
+	cmd := git
+	args := []string{"-C", repoPath, "gc"}
+
+	return exec.Command(cmd, args...).Run()
+}
+
 //Fetch - Will perform a 'git fetch --prune' command on the given repositry
 func Fetch(repoPath string) error {
 	cmd := git

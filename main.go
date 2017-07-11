@@ -15,6 +15,17 @@ import (
 	"github.com/h-marvin/GoGit/git"
 )
 
+type command int
+
+const (
+	// CLEAN - to perform a 'git gc' command
+	CLEAN command = iota
+	// FETCH - to perform a 'git fetch --prune' command
+	FETCH
+	// PULL - to perform a 'git pull' command
+	PULL
+)
+
 const (
 	branch        = "🌿️"
 	pathSeparator = ":"
@@ -26,8 +37,18 @@ func main() {
 	inputGitRoots := flag.String("path", "", "The path to the root folder to start looking for git repositories. More than one location can be passed with a colon as separator.")
 	filter := flag.String("filter", "", "Allows filtering for a certain value to occur in the .git/config (e.g. enterprise git address).")
 	recursive := flag.Bool("recursive", false, "If 'false' only the first level of folders will be checked. If 'true' sub folders will be checked also (will not check within sub folders of git repos).")
-	fetch := flag.Bool("fetch", false, "Decide whether you want to perform a fetch --prune request instead of a pull request.")
+	fetch := flag.Bool("fetch", false, "Decide whether you want to perform a 'fetch --prune' request instead of a pull request.")
+	clean := flag.Bool("clean", false, "Decide whether you want to perform a 'gc' request instead of a pull request.")
 	flag.Parse()
+
+	var action command
+	if *clean {
+		action = CLEAN
+	} else if *fetch {
+		action = FETCH
+	} else {
+		action = PULL
+	}
 
 	var gitRoots []string
 	if len(*inputGitRoots) == 0 {
@@ -43,7 +64,7 @@ func main() {
 	c := make(chan string, 4)
 	var wg sync.WaitGroup
 	wg.Add(1)
-	timeout := time.After(30 * time.Second)
+	timeout := time.After(60 * time.Second)
 
 	go func() {
 		for _, gitRoot := range gitRoots {
@@ -72,7 +93,7 @@ func main() {
 						wg.Add(1)
 						go func() {
 							defer wg.Done()
-							c <- performGitCommands(path, gitRoot, *fetch)
+							c <- performGitCommands(path, gitRoot, action)
 						}()
 					}
 				}
@@ -130,7 +151,7 @@ func repoKey(path string) string {
 	return path + "/"
 }
 
-func performGitCommands(repoPath string, gitRoot string, fetch bool) string {
+func performGitCommands(repoPath string, gitRoot string, action command) string {
 	branchDesc := getRepoName(repoPath) + " | "
 
 	branchName := git.GetBranchName(repoPath)
@@ -138,8 +159,11 @@ func performGitCommands(repoPath string, gitRoot string, fetch bool) string {
 		branchDesc += branch + "  " + branchName + " | "
 	}
 
-	if fetch {
+	if action == FETCH {
 		return "fetch | " + branchDesc + printResult(git.Fetch(repoPath))
+	}
+	if action == CLEAN {
+		return "clean | " + branchDesc + printResult(git.Clean(repoPath))
 	}
 	return branchDesc + printResult(git.Pull(repoPath))
 }
