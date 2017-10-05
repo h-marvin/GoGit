@@ -72,6 +72,10 @@ func main() {
 			gitRoot = ensureTrailingSlash(gitRoot)
 			gitLocations := make(map[string]int)
 			filepath.Walk(gitRoot, func(path string, info os.FileInfo, err error) error {
+				if info == nil {
+					return nil
+				}
+
 				if !info.IsDir() {
 					return nil
 				}
