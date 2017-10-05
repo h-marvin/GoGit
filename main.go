@@ -63,6 +63,7 @@ func main() {
 
 	c := make(chan string, 4)
 	var wg sync.WaitGroup
+	var repoCount int8
 	wg.Add(1)
 	timeout := time.After(60 * time.Second)
 
@@ -91,6 +92,7 @@ func main() {
 					rememberRepo(path, gitLocations)
 					if len(*filter) == 0 || git.SyncRepo(path, *filter) {
 						wg.Add(1)
+						repoCount++
 						go func() {
 							defer wg.Done()
 							c <- performGitCommands(path, gitRoot, action)
@@ -114,7 +116,7 @@ func main() {
 		case result := <-c:
 			log.Info(result)
 		case <-done:
-			log.Info("All repos have been synced.")
+			log.Infof("All %d repos have been synced.", repoCount)
 			return
 		case <-timeout:
 			log.Info("Operation timed out.")
